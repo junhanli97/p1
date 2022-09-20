@@ -4,7 +4,6 @@ package lsp
 
 import (
 	"errors"
-	"fmt"
 )
 
 type server struct {
