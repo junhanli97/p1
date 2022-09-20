@@ -2,7 +2,10 @@
 
 package lsp
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 type server struct {
 	// TODO: Implement this!
@@ -15,6 +18,7 @@ type server struct {
 // project 0, etc.) and immediately return. It should return a non-nil error if
 // there was an error resolving or listening on the specified port number.
 func NewServer(port int, params *Params) (Server, error) {
+	fmt.Println("hello")
 	return nil, errors.New("not yet implemented")
 }
 
