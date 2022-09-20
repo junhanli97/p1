@@ -2,9 +2,7 @@
 
 package lsp
 
-import (
-	"errors"
-)
+import "errors"
 
 type server struct {
 	// TODO: Implement this!
