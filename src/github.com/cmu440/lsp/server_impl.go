@@ -11,6 +11,13 @@ import (
 
 type cli struct {
 	clinetclose chan int
+	addr        *lspnet.UDPAddr
+}
+type ser struct {
+	msg     *Message
+	addr    *lspnet.UDPAddr
+	msgType MsgType
+	acked   bool
 }
 type server struct {
 	// TODO: Implement this!
@@ -24,6 +31,13 @@ type server struct {
 	closecompelet chan int // for server
 	sops          chan int
 	clients       map[int]cli
+	ack           chan int
+	MsgConnect    chan ser
+	MsgData       chan ser
+	MsgAck        chan ser
+	readchan      chan ser
+	writerequest  chan ser
+	writechan     chan ser
 }
 
 // NewServer creates, initiates, and returns a new server. This function should
@@ -42,6 +56,13 @@ func NewServer(port int, params *Params) (Server, error) {
 	s.closecompelet = make(chan int)
 	s.sops = make(chan int)
 	s.clients = make(map[int]cli)
+	s.ack = make(chan int)
+	s.MsgConnect = make(chan ser)
+	s.MsgData = make(chan ser)
+	s.MsgAck = make(chan ser)
+	s.readchan = make(chan ser)
+	s.writechan = make(chan ser)
+	s.writerequest = make(chan ser)
 	// start listening
 	addr, err := lspnet.ResolveUDPAddr("udp", ":"+strconv.Itoa(port))
 	if err != nil {
@@ -53,6 +74,7 @@ func NewServer(port int, params *Params) (Server, error) {
 	}
 	s.conn = *conn
 	go serverops(s)
+	go serverchan(s)
 	return s, nil
 
 }
@@ -60,7 +82,7 @@ func NewServer(port int, params *Params) (Server, error) {
 func serverops(s *server) {
 	for {
 		select {
-		case <-s.sops:
+		case <-s.sops: //eventHandlersExit
 			return
 
 		// case p := <-s.writeSignal:
@@ -70,7 +92,21 @@ func serverops(s *server) {
 				return
 			}
 			c.clinetclose <- 1
+		case ack := <-s.ack:
+			c := s.clients[ack.connId]
 		}
+	}
+}
+func serverchan(s *server) {
+	m := Message{}
+	for {
+		switch m.Type {
+		case MsgAck:
+			s.ack <- 1
+		case MsgConnect:
+
+		}
+
 	}
 }
 
@@ -85,14 +121,14 @@ func (s *server) Write(connId int, payload []byte) error {
 }
 
 func (s *server) CloseConn(connId int) error {
-	s.closeconnrequest <- connId
-	<-s.clinetclosedone
+	s.closeconnrequest <- connId //closeConnSignal
+	<-s.clinetclosedone          //cliExitDone
 	return nil
 }
 
 func (s *server) Close() error {
 	s.closesignal <- 1
-	err := <-s.closecompelet
+	err := <-s.closecompelet //closeDone
 	if err == 1 {
 		return errors.New("clients are lost during this time")
 	}
