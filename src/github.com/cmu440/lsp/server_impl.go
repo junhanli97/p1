@@ -3,6 +3,7 @@
 package lsp
 
 import (
+	"encoding/json"
 	"errors"
 	"strconv"
 
@@ -24,20 +25,20 @@ type server struct {
 	conn             lspnet.UDPConn
 	curid            int
 	closeconnrequest chan int //closeConnSignal for client
+	clinetconnclosed chan int //for client
 	clinetclosedone  chan int
 	// cliExitDone for client
-	closesignal chan int // for server
-	//clinetconnclosed chan int
+	closesignal   chan int // for server
 	closecompelet chan int // for server
 	sops          chan int
 	clients       map[int]cli
-	ack           chan int
-	MsgConnect    chan ser
-	MsgData       chan ser
-	MsgAck        chan ser
-	readchan      chan ser
-	writerequest  chan ser
-	writechan     chan ser
+	//ack           chan int
+	MsgConnect   chan ser
+	MsgData      chan ser
+	MsgAck       chan ser
+	readchan     chan ser
+	writerequest chan ser
+	writechan    chan ser
 }
 
 // NewServer creates, initiates, and returns a new server. This function should
@@ -52,11 +53,11 @@ func NewServer(port int, params *Params) (Server, error) {
 	s.closeconnrequest = make(chan int)
 	s.clinetclosedone = make(chan int)
 	s.closesignal = make(chan int)
-	//s.clinetconnclosed = make(chan int)
+	s.clinetconnclosed = make(chan int)
 	s.closecompelet = make(chan int)
 	s.sops = make(chan int)
 	s.clients = make(map[int]cli)
-	s.ack = make(chan int)
+	//s.ack = make(chan int)
 	s.MsgConnect = make(chan ser)
 	s.MsgData = make(chan ser)
 	s.MsgAck = make(chan ser)
@@ -92,17 +93,24 @@ func serverops(s *server) {
 				return
 			}
 			c.clinetclose <- 1
-		case ack := <-s.ack:
-			c := s.clients[ack.connId]
+		case ack := <-s.MsgAck:
+			c := s.clients[ack.msg.ConnID]
+			return //what should I do ?????????????
 		}
 	}
 }
 func serverchan(s *server) {
+	schan := make([]byte)
 	m := Message{}
+	err := json.Unmarshal(schan[0:size], &m)
+	if err != nil {
+		return
+	}
+	ser := ser{&m}
 	for {
 		switch m.Type {
 		case MsgAck:
-			s.ack <- 1
+			s.MsgAck <- p
 		case MsgConnect:
 
 		}
@@ -112,8 +120,15 @@ func serverchan(s *server) {
 
 func (s *server) Read() (int, []byte, error) {
 	// TODO: remove this line when you are ready to begin implementing this method.
-	select {} // Blocks indefinitely.
-	return -1, nil, errors.New("not yet implemented")
+	select {
+	case s := <-s.readchan:
+		return s.msg.ConnID, s.msg.Payload, nil
+	case cliclose := <-s.clinetconnclosed:
+		s.closeconnrequest <- cliclose
+		<-s.clinetclosedone
+		return cliclose, nil, errors.New("client closed")
+	} // Blocks indefinitely.
+	// return -1, nil, errors.New("not yet implemented")
 }
 
 func (s *server) Write(connId int, payload []byte) error {
